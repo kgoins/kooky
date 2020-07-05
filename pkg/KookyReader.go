@@ -12,7 +12,7 @@ type BrowserKookyReader interface {
 		expireAfter time.Time,
 	) ([]*Cookie, error)
 
-	ReadAllCookies() ([]*Cookie, error)
+	ReadAllCookies(filePath string) ([]*Cookie, error)
 
 	GetDefaultInstallPath(operatingSystem string) (string, error)
 	GetDefaultCookieFilePath(operatingSystem string) (string, error)
