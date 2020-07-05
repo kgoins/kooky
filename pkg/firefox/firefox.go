@@ -8,7 +8,32 @@ import (
 	kooky "github.com/kgoins/kooky/pkg"
 )
 
-func ReadFirefoxCookies(filename string) ([]*kooky.Cookie, error) {
+// CookieReader implements kooky.KookyReader for the Firefox browser
+type CookieReader struct {
+}
+
+// NewCookieReader returns a new CookieReader
+func NewCookieReader() CookieReader {
+	return CookieReader{}
+}
+
+// GetDefaultInstallPath returns the absolute filepath for the default install location on the current OS.
+func (reader CookieReader) GetDefaultInstallPath(operatingSystem string) (string, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// GetDefaultCookieFilePath returns the absolute filepath for the file used to store cookies on the current OS.
+func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (string, error) {
+	panic("not implemented") // TODO: Implement
+}
+
+// ReadCookies reads cookies from the input firefox sqlite database filepath, filtered by the input parameters.
+func (reader CookieReader) ReadCookies(filename string, domainFilter string, nameFilter string, expireAfter time.Time) ([]*kooky.Cookie, error) {
+	return reader.ReadAllCookies(filename)
+}
+
+// ReadAllCookies reads all cookies from the input firefox sqlite database filepath.
+func (reader CookieReader) ReadAllCookies(filename string) ([]*kooky.Cookie, error) {
 	var cookies []*kooky.Cookie
 	db, err := sqlite3.Open(filename)
 	if err != nil {
