@@ -1,6 +1,8 @@
 package firefox
 
 import (
+	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -57,5 +59,33 @@ func TestReadFirefoxCookies(t *testing.T) {
 	}
 	if c.Value != "a748915ba19c6d0b" {
 		t.Errorf("c.Value=%q", c.Value)
+	}
+}
+
+func TestFirefoxGetDefaultInstallPath(t *testing.T) {
+	reader := NewCookieReader()
+
+	installPath, err := reader.GetDefaultInstallPath(runtime.GOOS)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	_, err = os.Stat(installPath)
+	if os.IsNotExist(err) {
+		t.Fatalf("Unable to locate firefox binary")
+	}
+}
+
+func TestFirefoxGetDefaultCookiePath(t *testing.T) {
+	reader := NewCookieReader()
+
+	cookiePath, err := reader.GetDefaultCookieFilePath(runtime.GOOS)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	_, err = os.Stat(cookiePath)
+	if os.IsNotExist(err) {
+		t.Fatalf("Unable to locate firefox cookies database")
 	}
 }
