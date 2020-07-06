@@ -12,6 +12,8 @@ import (
 	"io"
 	"math"
 	"os"
+	"os/user"
+	"path/filepath"
 	"time"
 
 	kooky "github.com/kgoins/kooky/pkg"
@@ -46,14 +48,10 @@ var installLocationPathMap kooky.DefaultPathMap
 
 func init() {
 	cookiePathMap = kooky.NewDefaultPathMap()
-	cookiePathMap.Add("windows", "")
-	cookiePathMap.Add("darwin", "")
-	cookiePathMap.Add("linux", "")
+	cookiePathMap.Add("darwin", "Library/Cookies/Cookies.binarycookies")
 
 	installLocationPathMap = kooky.NewDefaultPathMap()
-	installLocationPathMap.Add("windows", "")
-	installLocationPathMap.Add("darwin", "")
-	installLocationPathMap.Add("linux", "")
+	installLocationPathMap.Add("darwin", "/Applications/Safari.app/Contents/MacOS/Safari")
 }
 
 // CookieReader implements kooky.KookyReader for the Safari browser
@@ -87,7 +85,12 @@ func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (str
 		return "", errors.New("Unsupported operating system")
 	}
 
-	return path, nil
+	currentUser, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(currentUser.HomeDir, path), nil
 }
 
 // ReadAllCookies reads all cookies from the input safari cookie database filepath.
