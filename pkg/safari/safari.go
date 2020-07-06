@@ -45,12 +45,12 @@ var cookiePathMap kooky.DefaultPathMap
 var installLocationPathMap kooky.DefaultPathMap
 
 func init() {
-	cookiePathMap = kooky.DefaultPathMap{}
+	cookiePathMap = kooky.NewDefaultPathMap()
 	cookiePathMap.Add("windows", "")
 	cookiePathMap.Add("darwin", "")
 	cookiePathMap.Add("linux", "")
 
-	installLocationPathMap = kooky.DefaultPathMap{}
+	installLocationPathMap = kooky.NewDefaultPathMap()
 	installLocationPathMap.Add("windows", "")
 	installLocationPathMap.Add("darwin", "")
 	installLocationPathMap.Add("linux", "")
