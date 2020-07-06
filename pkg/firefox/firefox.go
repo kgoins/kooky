@@ -3,6 +3,10 @@ package firefox
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os/user"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/go-sqlite/sqlite3"
@@ -14,14 +18,14 @@ var installLocationPathMap kooky.DefaultPathMap
 
 func init() {
 	cookiePathMap = kooky.NewDefaultPathMap()
-	cookiePathMap.Add("windows", "")
-	cookiePathMap.Add("darwin", "")
-	cookiePathMap.Add("linux", "")
+	cookiePathMap.Add("windows", `AppData\Roaming\Mozilla\Firefox\Profiles\`)
+	cookiePathMap.Add("darwin", "Library/Application Support/Firefox/Profiles/")
+	cookiePathMap.Add("linux", ".mozilla/firefox/")
 
 	installLocationPathMap = kooky.NewDefaultPathMap()
-	installLocationPathMap.Add("windows", "")
-	installLocationPathMap.Add("darwin", "")
-	installLocationPathMap.Add("linux", "")
+	installLocationPathMap.Add("windows", `C:\Program Files\Mozilla Firefox\firefox.exe`)
+	installLocationPathMap.Add("darwin", "/Applications/Firefox.app/Contents/MacOS/firefox")
+	installLocationPathMap.Add("linux", "/usr/bin/firefox")
 }
 
 // CookieReader implements kooky.KookyReader for the Firefox browser
@@ -48,6 +52,23 @@ func (reader CookieReader) GetDefaultInstallPath(operatingSystem string) (string
 	return path, nil
 }
 
+func getDefaultProfile(profileDirPath string) (string, error) {
+	profileDir, err := ioutil.ReadDir(profileDirPath)
+	if err != nil {
+		return "", err
+	}
+
+	for _, entry := range profileDir {
+		if entry.IsDir() {
+			if strings.Contains(entry.Name(), ".default") {
+				return entry.Name(), nil
+			}
+		}
+	}
+
+	return "", errors.New("Unable to locate default profile")
+}
+
 // GetDefaultCookieFilePath returns the absolute filepath for the file used to store cookies on the current OS.
 func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (string, error) {
 	path, found := reader.cookiePathMap.Get(operatingSystem)
@@ -55,7 +76,18 @@ func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (str
 		return "", errors.New("Unsupported operating system")
 	}
 
-	return path, nil
+	currentUser, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	profileDirPath := filepath.Join(currentUser.HomeDir, path)
+	defaultProfile, err := getDefaultProfile(profileDirPath)
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(profileDirPath, defaultProfile, "cookies.sqlite"), nil
 }
 
 // ReadCookies reads cookies from the input firefox sqlite database filepath, filtered by the input parameters.
