@@ -15,7 +15,9 @@ func TestReadSafariCookies(t *testing.T) {
 		t.Fatalf("Failed to load test data file")
 	}
 
-	cookies, err := ReadSafariCookies(testCookiesPath, "", "", time.Time{})
+	reader := NewCookieReader()
+
+	cookies, err := reader.ReadAllCookies(testCookiesPath)
 	if err != nil {
 		t.Fatal(err)
 	}
