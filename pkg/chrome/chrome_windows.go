@@ -9,7 +9,10 @@ import (
 )
 
 const (
-	CRYPTPROTECT_UI_FORBIDDEN = 0x1
+	// CryptProtectUIForbidden prevents popups during CryptUnprotectData
+	// as explained on MSDN:
+	// https://docs.microsoft.com/en-us/windows/win32/api/dpapi/nf-dpapi-cryptunprotectdata#parameters
+	CryptProtectUIForbidden = 0x1
 )
 
 var (
@@ -20,34 +23,45 @@ var (
 	procLocalFree   = dllkernel32.NewProc("LocalFree")
 )
 
-type data_blob struct {
+type dataBlob struct {
 	cbData uint32
 	pbData *byte
 }
 
-func newBlob(d []byte) *data_blob {
+func newBlob(d []byte) *dataBlob {
 	if len(d) == 0 {
-		return &data_blob{}
+		return &dataBlob{}
 	}
-	return &data_blob{
+	return &dataBlob{
 		pbData: &d[0],
 		cbData: uint32(len(d)),
 	}
 }
 
-func (b *data_blob) toByteArray() []byte {
+func (b *dataBlob) toByteArray() []byte {
 	d := make([]byte, b.cbData)
 	copy(d, (*[1 << 30]byte)(unsafe.Pointer(b.pbData))[:])
 	return d
 }
 
 func decrypt(data []byte) ([]byte, error) {
-	var outblob data_blob
-	r, _, err := procDecryptData.Call(uintptr(unsafe.Pointer(newBlob(data))), 0, 0, 0, 0, CRYPTPROTECT_UI_FORBIDDEN, uintptr(unsafe.Pointer(&outblob)))
+	var outblob dataBlob
+	r, _, err := procDecryptData.Call(
+		uintptr(unsafe.Pointer(newBlob(data))),
+		0,
+		0,
+		0,
+		0,
+		CryptProtectUIForbidden,
+		uintptr(unsafe.Pointer(&outblob)),
+	)
+
 	if r == 0 {
 		return nil, err
 	}
+
 	defer procLocalFree.Call(uintptr(unsafe.Pointer(outblob.pbData)))
+
 	return outblob.toByteArray(), nil
 }
 

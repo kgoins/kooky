@@ -1,6 +1,7 @@
 package firefox
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,7 +9,62 @@ import (
 	kooky "github.com/kgoins/kooky/pkg"
 )
 
-func ReadFirefoxCookies(filename string) ([]*kooky.Cookie, error) {
+var cookiePathMap kooky.DefaultPathMap
+var installLocationPathMap kooky.DefaultPathMap
+
+func init() {
+	cookiePathMap = kooky.NewDefaultPathMap()
+	cookiePathMap.Add("windows", "")
+	cookiePathMap.Add("darwin", "")
+	cookiePathMap.Add("linux", "")
+
+	installLocationPathMap = kooky.NewDefaultPathMap()
+	installLocationPathMap.Add("windows", "")
+	installLocationPathMap.Add("darwin", "")
+	installLocationPathMap.Add("linux", "")
+}
+
+// CookieReader implements kooky.KookyReader for the Firefox browser
+type CookieReader struct {
+	cookiePathMap          kooky.DefaultPathMap
+	installLocationPathMap kooky.DefaultPathMap
+}
+
+// NewCookieReader returns a new CookieReader
+func NewCookieReader() CookieReader {
+	return CookieReader{
+		cookiePathMap:          cookiePathMap,
+		installLocationPathMap: installLocationPathMap,
+	}
+}
+
+// GetDefaultInstallPath returns the absolute filepath for the default install location on the current OS.
+func (reader CookieReader) GetDefaultInstallPath(operatingSystem string) (string, error) {
+	path, found := reader.installLocationPathMap.Get(operatingSystem)
+	if !found {
+		return "", errors.New("Unsupported operating system")
+	}
+
+	return path, nil
+}
+
+// GetDefaultCookieFilePath returns the absolute filepath for the file used to store cookies on the current OS.
+func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (string, error) {
+	path, found := reader.cookiePathMap.Get(operatingSystem)
+	if !found {
+		return "", errors.New("Unsupported operating system")
+	}
+
+	return path, nil
+}
+
+// ReadCookies reads cookies from the input firefox sqlite database filepath, filtered by the input parameters.
+func (reader CookieReader) ReadCookies(filename string, domainFilter string, nameFilter string, expireAfter time.Time) ([]*kooky.Cookie, error) {
+	return reader.ReadAllCookies(filename)
+}
+
+// ReadAllCookies reads all cookies from the input firefox sqlite database filepath.
+func (reader CookieReader) ReadAllCookies(filename string) ([]*kooky.Cookie, error) {
 	var cookies []*kooky.Cookie
 	db, err := sqlite3.Open(filename)
 	if err != nil {

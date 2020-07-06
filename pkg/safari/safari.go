@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -31,7 +32,7 @@ type cookieHeader struct {
 	Unknown1       int32
 	Flags          int32
 	Unknown2       int32
-	UrlOffset      int32
+	URLOffset      int32
 	NameOffset     int32
 	PathOffset     int32
 	ValueOffset    int32
@@ -40,7 +41,62 @@ type cookieHeader struct {
 	CreationDate   float64
 }
 
-func ReadSafariCookies(filename string, domainFilter string, nameFilter string, expireAfter time.Time) ([]*kooky.Cookie, error) {
+var cookiePathMap kooky.DefaultPathMap
+var installLocationPathMap kooky.DefaultPathMap
+
+func init() {
+	cookiePathMap = kooky.NewDefaultPathMap()
+	cookiePathMap.Add("windows", "")
+	cookiePathMap.Add("darwin", "")
+	cookiePathMap.Add("linux", "")
+
+	installLocationPathMap = kooky.NewDefaultPathMap()
+	installLocationPathMap.Add("windows", "")
+	installLocationPathMap.Add("darwin", "")
+	installLocationPathMap.Add("linux", "")
+}
+
+// CookieReader implements kooky.KookyReader for the Safari browser
+type CookieReader struct {
+	cookiePathMap          kooky.DefaultPathMap
+	installLocationPathMap kooky.DefaultPathMap
+}
+
+// NewCookieReader returns a new CookieReader
+func NewCookieReader() CookieReader {
+	return CookieReader{
+		cookiePathMap:          cookiePathMap,
+		installLocationPathMap: installLocationPathMap,
+	}
+}
+
+// GetDefaultInstallPath returns the absolute filepath for the default install location on the current OS.
+func (reader CookieReader) GetDefaultInstallPath(operatingSystem string) (string, error) {
+	path, found := reader.installLocationPathMap.Get(operatingSystem)
+	if !found {
+		return "", errors.New("Unsupported operating system")
+	}
+
+	return path, nil
+}
+
+// GetDefaultCookieFilePath returns the absolute filepath for the file used to store cookies on the current OS.
+func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (string, error) {
+	path, found := reader.cookiePathMap.Get(operatingSystem)
+	if !found {
+		return "", errors.New("Unsupported operating system")
+	}
+
+	return path, nil
+}
+
+// ReadAllCookies reads all cookies from the input safari cookie database filepath.
+func (reader CookieReader) ReadAllCookies(filename string) ([]*kooky.Cookie, error) {
+	return reader.ReadCookies(filename, "", "", time.Time{})
+}
+
+// ReadCookies reads cookies from the input safari cookie database filepath, filtered by the input parameters.
+func (reader CookieReader) ReadCookies(filename string, domainFilter string, nameFilter string, expireAfter time.Time) ([]*kooky.Cookie, error) {
 	var allCookies []*kooky.Cookie
 
 	f, err := os.Open(filename)
@@ -137,7 +193,7 @@ func readCookie(r io.ReadSeeker) (*kooky.Cookie, error) {
 	expiry := safariCookieDate(ch.ExpirationDate)
 	creation := safariCookieDate(ch.CreationDate)
 
-	url, err := readString(r, "url", start, ch.UrlOffset)
+	url, err := readString(r, "url", start, ch.URLOffset)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +211,6 @@ func readCookie(r io.ReadSeeker) (*kooky.Cookie, error) {
 	}
 
 	cookie := &kooky.Cookie{}
-
 	cookie.Expires = expiry
 	cookie.Creation = creation
 	cookie.Name = name
@@ -164,6 +219,7 @@ func readCookie(r io.ReadSeeker) (*kooky.Cookie, error) {
 	cookie.Path = path
 	cookie.Secure = (ch.Flags & 1) > 0
 	cookie.HttpOnly = (ch.Flags & 4) > 0
+
 	return cookie, nil
 }
 
@@ -171,6 +227,7 @@ func readString(r io.ReadSeeker, field string, start int64, offset int32) (strin
 	if _, err := r.Seek(start+int64(offset), io.SeekStart); err != nil {
 		return "", fmt.Errorf("seeking for %q at offset %d", field, offset)
 	}
+
 	b := bufio.NewReader(r)
 	value, err := b.ReadString(0)
 	if err != nil {

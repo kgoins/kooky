@@ -1,6 +1,7 @@
 package chrome
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -8,7 +9,62 @@ import (
 	kooky "github.com/kgoins/kooky/pkg"
 )
 
-func ReadChromeCookies(filename string, domainFilter string, nameFilter string, expireAfter time.Time) ([]*kooky.Cookie, error) {
+var cookiePathMap kooky.DefaultPathMap
+var installLocationPathMap kooky.DefaultPathMap
+
+func init() {
+	cookiePathMap = kooky.NewDefaultPathMap()
+	cookiePathMap.Add("windows", "")
+	cookiePathMap.Add("darwin", "")
+	cookiePathMap.Add("linux", "")
+
+	installLocationPathMap = kooky.NewDefaultPathMap()
+	installLocationPathMap.Add("windows", "")
+	installLocationPathMap.Add("darwin", "")
+	installLocationPathMap.Add("linux", "")
+}
+
+// CookieReader implements kooky.KookyReader for the Chrome browser
+type CookieReader struct {
+	cookiePathMap          kooky.DefaultPathMap
+	installLocationPathMap kooky.DefaultPathMap
+}
+
+// NewCookieReader returns a new CookieReader
+func NewCookieReader() CookieReader {
+	return CookieReader{
+		cookiePathMap:          cookiePathMap,
+		installLocationPathMap: installLocationPathMap,
+	}
+}
+
+// GetDefaultInstallPath returns the absolute filepath for the default install location on the current OS.
+func (reader CookieReader) GetDefaultInstallPath(operatingSystem string) (string, error) {
+	path, found := reader.installLocationPathMap.Get(operatingSystem)
+	if !found {
+		return "", errors.New("Unsupported operating system")
+	}
+
+	return path, nil
+}
+
+// GetDefaultCookieFilePath returns the absolute filepath for the file used to store cookies on the current OS.
+func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (string, error) {
+	path, found := reader.cookiePathMap.Get(operatingSystem)
+	if !found {
+		return "", errors.New("Unsupported operating system")
+	}
+
+	return path, nil
+}
+
+// ReadAllCookies reads all cookies from the input sqlite database filepath.
+func (reader CookieReader) ReadAllCookies(filename string) ([]*kooky.Cookie, error) {
+	return reader.ReadCookies(filename, "", "", time.Time{})
+}
+
+// ReadCookies reads cookies from the input chrome sqlite database filepath, filtered by the input parameters.
+func (reader CookieReader) ReadCookies(filename string, domainFilter string, nameFilter string, expireAfter time.Time) ([]*kooky.Cookie, error) {
 	var cookies []*kooky.Cookie
 	db, err := sqlite3.Open(filename)
 	if err != nil {
@@ -65,10 +121,11 @@ func ReadChromeCookies(filename string, domainFilter string, nameFilter string, 
 		if !ok {
 			return fmt.Errorf("expected column 5 (path) in cookie(domain:%s, name:%s) to to be string; got %T", domain, name, rec.Values[4])
 		}
-		var expires_utc int64
+
+		var expiresUTC int64
 		switch i := rec.Values[5].(type) {
 		case int64:
-			expires_utc = i
+			expiresUTC = i
 		case int:
 			if i != 0 {
 				return fmt.Errorf("expected column 6 (expires_utc) in cookie(domain:%s, name:%s) to to be int64 or int with value=0; got %T with value %v", domain, name, rec.Values[5], rec.Values[5])
@@ -76,14 +133,15 @@ func ReadChromeCookies(filename string, domainFilter string, nameFilter string, 
 		default:
 			return fmt.Errorf("expected column 6 (expires_utc) in cookie(domain:%s, name:%s) to to be int64 or int with value=0; got %T with value %v", domain, name, rec.Values[5], rec.Values[5])
 		}
-		encrypted_value, ok := rec.Values[12].([]byte)
+
+		encryptedValue, ok := rec.Values[12].([]byte)
 		if !ok {
 			return fmt.Errorf("expected column 13 (encrypted_value) in cookie(domain:%s, name:%s) to to be []byte; got %T", domain, name, rec.Values[12])
 		}
 
 		var expiry time.Time
-		if expires_utc != 0 {
-			expiry = chromeCookieDate(expires_utc)
+		if expiresUTC != 0 {
+			expiry = chromeCookieDate(expiresUTC)
 		}
 		creation := chromeCookieDate(*rowId)
 
@@ -107,8 +165,8 @@ func ReadChromeCookies(filename string, domainFilter string, nameFilter string, 
 		cookie.Secure = rec.Values[6] == 1
 		cookie.HttpOnly = rec.Values[7] == 1
 
-		if len(encrypted_value) > 0 {
-			decrypted, err := decryptValue(encrypted_value)
+		if len(encryptedValue) > 0 {
+			decrypted, err := decryptValue(encryptedValue)
 			if err != nil {
 				return fmt.Errorf("decrypting cookie %v: %v", cookie, err)
 			}
@@ -125,6 +183,7 @@ func ReadChromeCookies(filename string, domainFilter string, nameFilter string, 
 	}
 
 	return cookies, nil
+
 }
 
 // See https://cs.chromium.org/chromium/src/base/time/time.h?l=452&rcl=fceb9a030c182e939a436a540e6dacc70f161cb1
@@ -132,10 +191,10 @@ const windowsToUnixMicrosecondsOffset = 11644473600000000
 
 // chromeCookieDate converts microseconds to a time.Time object,
 // accounting for the switch to Windows epoch (Jan 1 1601).
-func chromeCookieDate(timestamp_utc int64) time.Time {
-	if timestamp_utc > windowsToUnixMicrosecondsOffset {
-		timestamp_utc -= windowsToUnixMicrosecondsOffset
+func chromeCookieDate(timestampUTC int64) time.Time {
+	if timestampUTC > windowsToUnixMicrosecondsOffset {
+		timestampUTC -= windowsToUnixMicrosecondsOffset
 	}
 
-	return time.Unix(timestamp_utc/1000000, (timestamp_utc%1000000)*1000)
+	return time.Unix(timestampUTC/1000000, (timestampUTC%1000000)*1000)
 }
