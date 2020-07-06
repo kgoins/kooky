@@ -1,6 +1,8 @@
 package chrome
 
 import (
+	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -48,5 +50,32 @@ func TestReadChromeCookies(t *testing.T) {
 	if !cookie.Creation.Equal(wantCreation) {
 		t.Errorf("Want cookie.Creation=%v; got %v", wantCreation, cookie.Creation)
 	}
+}
 
+func TestChromeGetDefaultInstallPath(t *testing.T) {
+	reader := NewCookieReader()
+
+	installPath, err := reader.GetDefaultInstallPath(runtime.GOOS)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	_, err = os.Stat(installPath)
+	if os.IsNotExist(err) {
+		t.Fatalf("Unable to locate chrome binary")
+	}
+}
+
+func TestChromeGetDefaultCookiePath(t *testing.T) {
+	reader := NewCookieReader()
+
+	cookiePath, err := reader.GetDefaultCookieFilePath(runtime.GOOS)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	_, err = os.Stat(cookiePath)
+	if os.IsNotExist(err) {
+		t.Fatalf("Unable to locate chrome cookies database")
+	}
 }
