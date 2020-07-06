@@ -3,6 +3,8 @@ package chrome
 import (
 	"errors"
 	"fmt"
+	"os/user"
+	"path/filepath"
 	"time"
 
 	"github.com/go-sqlite/sqlite3"
@@ -14,14 +16,14 @@ var installLocationPathMap kooky.DefaultPathMap
 
 func init() {
 	cookiePathMap = kooky.NewDefaultPathMap()
-	cookiePathMap.Add("windows", "")
-	cookiePathMap.Add("darwin", "")
-	cookiePathMap.Add("linux", "")
+	cookiePathMap.Add("windows", `AppData\Local\Google\Chrome\User Data\Default`)
+	cookiePathMap.Add("darwin", "Library/Application Support/Google/Chrome/Default")
+	cookiePathMap.Add("linux", ".config/google-chrome/Default")
 
 	installLocationPathMap = kooky.NewDefaultPathMap()
-	installLocationPathMap.Add("windows", "")
-	installLocationPathMap.Add("darwin", "")
-	installLocationPathMap.Add("linux", "")
+	installLocationPathMap.Add("windows", `C:\Program Files (x86)\Google\Chrome\Application\chrome.exe`)
+	installLocationPathMap.Add("darwin", "/Applications/Google Chrome.app/Contents/MacOs/Google Chrome")
+	installLocationPathMap.Add("linux", "/usr/bin/google-chrome")
 }
 
 // CookieReader implements kooky.KookyReader for the Chrome browser
@@ -55,7 +57,13 @@ func (reader CookieReader) GetDefaultCookieFilePath(operatingSystem string) (str
 		return "", errors.New("Unsupported operating system")
 	}
 
-	return path, nil
+	currentUser, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+
+	profileDirPath := filepath.Join(currentUser.HomeDir, path)
+	return filepath.Join(profileDirPath, "Cookies"), nil
 }
 
 // ReadAllCookies reads all cookies from the input sqlite database filepath.
